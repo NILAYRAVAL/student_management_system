@@ -1,16 +1,7 @@
 package project;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Scanner;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -49,16 +40,6 @@ public class StudentManager {
         students.add(student);
         System.out.println(LanguageSupport.getString("message.studentAdded"));
     }
-
-    public void showAllStudents() {
-        if (students.isEmpty()) {
-            System.out.println(LanguageSupport.getString("message.noStudents"));
-        } else {
-            System.out.println(LanguageSupport.getString("message.studentsList"));
-            students.forEach(Student::printInfo);
-        }
-    }
-
     public void updateStudent() {
         System.out.print(LanguageSupport.getString("prompt.studentIdToUpdate"));
         String studentId = scanner.nextLine();
@@ -70,13 +51,23 @@ public class StudentManager {
                 System.out.print(LanguageSupport.getString("prompt.newAge") + " (current: " + student.age() + "): ");
                 int newAge = Integer.parseInt(scanner.nextLine());
 
-                Student updatedStudent = student instanceof FullTimeStudent
-                        ? new FullTimeStudent(newName.isEmpty() ? student.name() : newName,
-                        newAge <= 0 ? student.age() : newAge, student.studentId(),
-                        student.status(), student.enrollmentDate())
-                        : new PartTimeStudent(newName.isEmpty() ? student.name() : newName,
-                        newAge <= 0 ? student.age() : newAge, student.studentId(),
-                        student.status(), student.enrollmentDate());
+                Student updatedStudent = switch (student) {
+                    case FullTimeStudent ft -> new FullTimeStudent(
+                        newName.isEmpty() ? ft.name() : newName, 
+                        newAge <= 0 ? ft.age() : newAge, 
+                        ft.studentId(), 
+                        ft.status(), 
+                        ft.enrollmentDate()
+                    );
+                    case PartTimeStudent pt -> new PartTimeStudent(
+                        newName.isEmpty() ? pt.name() : newName, 
+                        newAge <= 0 ? pt.age() : newAge, 
+                        pt.studentId(), 
+                        pt.status(), 
+                        pt.enrollmentDate()
+                    );
+                    default -> student; // Fallback, shouldn't happen with current model
+                };
 
                 students.remove(student);
                 students.add(updatedStudent);
@@ -87,141 +78,105 @@ public class StudentManager {
         System.out.println(LanguageSupport.getString("message.studentNotFound"));
     }
 
-    public void removeStudent() {
-        System.out.print(LanguageSupport.getString("prompt.studentIdToRemove"));
+
+  
+
+       public void removeStudent() {
+        System.out.print("Enter student ID to remove: ");
         String studentId = scanner.nextLine();
-        students.removeIf(student -> student.studentId().equals(studentId));
-        System.out.println(LanguageSupport.getString("message.studentRemoved"));
+
+        Iterator<Student> iterator = students.iterator();
+        while (iterator.hasNext()) {
+            Student student = iterator.next();
+            if (student.studentId().equals(studentId)) {
+                iterator.remove();
+                System.out.println("Student with ID " + studentId + " has been removed.");
+                return;
+            }
+        }
+
+        System.out.println("Student with ID " + studentId + " not found.");
+    }
+       public void showAllStudents() {
+           if (students.isEmpty()) {
+               System.out.println(LanguageSupport.getString("message.noStudents"));
+           } else {
+               System.out.println(LanguageSupport.getString("message.studentsList"));
+               students.forEach(Student::printInfo);
+           }
+       }
+    public void showStatistics() {
+        long activeCount = students.stream().filter(s -> s.status() == StudentStatus.ACTIVE).count();
+        long inactiveCount = students.stream().filter(s -> s.status() == StudentStatus.INACTIVE).count();
+        long graduatedCount = students.stream().filter(s -> s.status() == StudentStatus.GRADUATED).count();
+
+        System.out.println("Student Statistics:");
+        System.out.println("Active students: " + activeCount);
+        System.out.println("Inactive students: " + inactiveCount);
+        System.out.println("Graduated students: " + graduatedCount);
     }
 
     public void updateStudentStatus() {
-        System.out.print(LanguageSupport.getString("prompt.studentIdToUpdateStatus"));
+        System.out.print("Enter student ID to update status: ");
         String studentId = scanner.nextLine();
 
         for (Student student : students) {
             if (student.studentId().equals(studentId)) {
-                System.out.print(LanguageSupport.getString("prompt.newStatus") + " (ACTIVE, INACTIVE, GRADUATED): ");
-                String newStatus = scanner.nextLine().toUpperCase();
+                System.out.print("Enter new status (ACTIVE/INACTIVE/GRADUATED): ");
+                String status = scanner.nextLine().toUpperCase();
 
                 try {
-                    StudentStatus status = StudentStatus.valueOf(newStatus);
-                    Student updatedStudent = student instanceof FullTimeStudent
-                            ? new FullTimeStudent(student.name(), student.age(), student.studentId(), status,
-                            student.enrollmentDate())
-                            : new PartTimeStudent(student.name(), student.age(), student.studentId(), status,
-                            student.enrollmentDate());
+                    StudentStatus newStatus = StudentStatus.valueOf(status);
+                    Student updatedStudent = switch (student) {
+                        case FullTimeStudent ft -> new FullTimeStudent(ft.name(), ft.age(), ft.studentId(), newStatus, ft.enrollmentDate());
+                        case PartTimeStudent pt -> new PartTimeStudent(pt.name(), pt.age(), pt.studentId(), newStatus, pt.enrollmentDate());
+                        default -> student;
+                    };
 
                     students.remove(student);
                     students.add(updatedStudent);
-                    System.out.println(LanguageSupport.getString("message.statusUpdated"));
+                    System.out.println("Status updated for student with ID " + studentId);
+                    return;
                 } catch (IllegalArgumentException e) {
-                    System.out.println(LanguageSupport.getString("error.invalidStatus"));
+                    System.out.println("Invalid status entered.");
                 }
-                return;
             }
         }
-        System.out.println(LanguageSupport.getString("message.studentNotFound"));
-    }
 
-    public void showStatistics() {
-        long activeCount = StudentStatistics.countActiveStudents(students);
-        System.out.println(LanguageSupport.getString("message.totalActiveStudents") + activeCount);
-
-        var groupedStudents = StudentStatistics.groupStudentsByStatus(students);
-        groupedStudents.forEach((status, studentList) -> {
-            System.out.println(status + ":");
-            studentList.forEach(Student::printInfo);
-        });
-
-        Student oldestStudent = StudentStatistics.findOldestStudent(students);
-        if (oldestStudent != null) {
-            System.out.println(LanguageSupport.getString("message.oldestStudent"));
-            oldestStudent.printInfo();
-        } else {
-            System.out.println(LanguageSupport.getString("message.noStudentsAvailable"));
-        }
-    }
-
-    public void processStudentsConcurrently() {
-        ExecutorService executor = Executors.newFixedThreadPool(4);
-        students.forEach(student -> executor.submit(student::printInfo));
-        executor.shutdown();
+        System.out.println("Student with ID " + studentId + " not found.");
     }
 
     public void sortStudents(String attribute) {
-        Comparator<Student> comparator;
-        switch (attribute) {
-            case "name" -> comparator = Comparator.comparing(Student::name);
-            case "age" -> comparator = Comparator.comparingInt(Student::age);
-            case "studentId" -> comparator = Comparator.comparing(Student::studentId);
-            default -> {
-                System.out.println(LanguageSupport.getString("error.invalidSortAttribute"));
-                return;
-            }
+        switch (attribute.toLowerCase()) {
+            case "name" -> students.sort(Comparator.comparing(Student::name));
+            case "age" -> students.sort(Comparator.comparingInt(Student::age));
+            case "studentid" -> students.sort(Comparator.comparing(Student::studentId));
+            default -> System.out.println("Invalid attribute for sorting.");
         }
 
-        students.sort(comparator);
-        System.out.println(LanguageSupport.getString("message.studentsSorted"));
-        showAllStudents();
+        showAllStudents(); // Display sorted students
     }
 
-    public void filterStudents(String status) {
-        try {
-            StudentStatus studentStatus = StudentStatus.valueOf(status.toUpperCase());
-            List<Student> filteredStudents = students.stream()
-                    .filter(student -> student.status() == studentStatus)
-                    .collect(Collectors.toList());
-
-            if (filteredStudents.isEmpty()) {
-                System.out.println(LanguageSupport.getString("message.noStudents"));
-            } else {
-                System.out.println(LanguageSupport.getString("message.studentsList"));
-                filteredStudents.forEach(Student::printInfo);
-            }
-        } catch (IllegalArgumentException e) {
-            System.out.println(LanguageSupport.getString("error.invalidStatus"));
-        }
-    }
-
-    public void saveStudentsToFile(String filename) {
-        Path path = Paths.get(filename);
-        try {
-            Files.write(path, students.stream()
-                    .map(student -> String.join(",", student.name(), String.valueOf(student.age()), student.studentId(), student.status().toString(), student.enrollmentDate().toString()))
-                    .collect(Collectors.toList()));
-            System.out.println("Students saved to file: " + filename);
-        } catch (IOException e) {
-            System.out.println("Error saving students to file: " + e.getMessage());
-        }
-    }
-
-    public void loadStudentsFromFile(String filename) {
-        Path path = Paths.get(filename);
-        try {
-            List<String> lines = Files.readAllLines(path);
-            for (String line : lines) {
-                String[] parts = line.split(",");
-                if (parts.length != 5) {
-                    System.out.println("Skipping invalid line: " + line);
-                    continue;
-                }
-                String name = parts[0];
-                int age = Integer.parseInt(parts[1]);
-                String studentId = parts[2];
-                StudentStatus status = StudentStatus.valueOf(parts[3]);
-                LocalDate enrollmentDate = LocalDate.parse(parts[4]);
-
-                Student student = (status == StudentStatus.ACTIVE) 
-                        ? new FullTimeStudent(name, age, studentId, status, enrollmentDate) 
-                        : new PartTimeStudent(name, age, studentId, status, enrollmentDate);
-
-                students.add(student);
-            }
-            System.out.println("Students loaded from file: " + filename);
-        } catch (IOException e) {
-            System.out.println("Error loading students from file: " + e.getMessage());
-        } catch (IllegalArgumentException e) {
-            System.out.println("Error parsing student data: " + e.getMessage());
+    public void filterStudents(String criteria) {
+        switch (criteria.toLowerCase()) {
+            case "active":
+                students.stream().filter(StudentFilter.isActive()).forEach(Student::printInfo);
+                break;
+            case "inactive":
+                students.stream().filter(StudentFilter.isInactive()).forEach(Student::printInfo);
+                break;
+            case "graduated":
+                students.stream().filter(StudentFilter.isGraduated()).forEach(Student::printInfo);
+                break;
+            case "fulltime":
+                students.stream().filter(StudentFilter.isFullTime()).forEach(Student::printInfo);
+                break;
+            case "parttime":
+                students.stream().filter(StudentFilter.isPartTime()).forEach(Student::printInfo);
+                break;
+            default:
+                System.out.println(LanguageSupport.getString("error.invalidFilter"));
+                break;
         }
     }
 }
