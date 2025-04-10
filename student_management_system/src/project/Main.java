@@ -12,8 +12,7 @@ public class Main {
         LanguageSupport.setLanguage("en");
 
         while (true) {
-            System.out.println(
-                    "\nEnter command: add, update, remove, display, stats, updateStatus, process, lang, sort, filter, exit");
+            System.out.println("\nEnter command: add, update, remove, display, stats, updateStatus, lang, sort, filter, exit");
             String command = scanner.nextLine();
 
             switch (command) {
@@ -23,7 +22,6 @@ public class Main {
                 case "display" -> manager.showAllStudents();
                 case "stats" -> manager.showStatistics();
                 case "updateStatus" -> manager.updateStudentStatus();
-                case "process" -> manager.processStudentsConcurrently();
                 case "lang" -> {
                     System.out.print("Enter language code (en/es/ga): ");
                     String lang = scanner.nextLine();
@@ -36,7 +34,7 @@ public class Main {
                     manager.sortStudents(attribute);
                 }
                 case "filter" -> {
-                    System.out.print("Filter by status (ACTIVE/INACTIVE/GRADUATED): ");
+                    System.out.print("Filter by status (ACTIVE/INACTIVE/GRADUATED/fulltime/parttime): ");
                     String status = scanner.nextLine();
                     manager.filterStudents(status);
                 }
